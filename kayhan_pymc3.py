@@ -49,12 +49,30 @@ with pm.Model() as mixedEffect_model:
                   sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
     
 with mixedEffect_model:
-    # means, sds, elbos = pm.variational.advi(n=10000)
+    means, sds, elbos = pm.variational.advi(n=100000)
     # trace = pm.sample(50000,step=pm.Metropolis())
     trace = pm.sample(3000)
-    
-#%%
+#%% plot advi and NUTS (copy from pymc3 example)
+from scipy import stats
 import seaborn as sns
+varnames = means.keys()
+fig, axs = plt.subplots(nrows=len(varnames), figsize=(12, 18))
+for var, ax in zip(varnames, axs):
+    mu_arr = means[var]
+    sigma_arr = sds[var]
+    ax.set_title(var)
+    for i, (mu, sigma) in enumerate(zip(mu_arr.flatten(), sigma_arr.flatten())):
+        sd3 = (-4*sigma + mu, 4*sigma + mu)
+        x = np.linspace(sd3[0], sd3[1], 300)
+        y = stats.norm(mu, sigma).pdf(x)
+        ax.plot(x, y)
+        if trace[var].ndim > 1:
+            t = trace[var][i]
+        else:
+            t = trace[var]
+        sns.distplot(t, kde=False, norm_hist=True, ax=ax)
+fig.tight_layout()
+#%%
 pm.traceplot(trace[0::2]) # 
 plt.show()
 
