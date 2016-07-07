@@ -40,7 +40,7 @@ Pheno   = np.dot(X,w0) + np.dot(L,z0) + Y.flatten()
 with pm.Model() as mixedEffect_model:
     ### hyperpriors
     h2     = pm.Uniform('h2')
-    sigma2 = pm.HalfCauchy('eps', 5)
+    sigma2 = pm.HalfCauchy('sigma2', 5)
     #beta_0 = pm.Uniform('beta_0', lower=-1000, upper=1000)   # a replacement for improper prior
     w = pm.Normal('w', mu = 0, sd = 100, shape=M)
     z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
@@ -48,10 +48,39 @@ with pm.Model() as mixedEffect_model:
     y = pm.Normal('y', mu = g + T.dot(X,w), 
                   sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
     
+#%% advi
 with mixedEffect_model:
     means, sds, elbos = pm.variational.advi(n=100000)
-    # trace = pm.sample(50000,step=pm.Metropolis())
+#%% Metropolis
+with mixedEffect_model:
+    trace = pm.sample(50000,step=pm.Metropolis())
     trace = pm.sample(3000)
+#%% NUTS
+with mixedEffect_model:
+    trace = pm.sample(3000)
+#%% atmcmc
+test_folder = ('ATMIP_TEST')
+n_chains = 500
+n_steps = 100
+tune_interval = 25
+njobs = 1
+
+from pymc3.step_methods import ATMCMC as atmcmc
+with mixedEffect_model:
+    step = atmcmc.ATMCMC(n_chains=n_chains, tune_interval=tune_interval,
+                         likelihood_name=mixedEffect_model.deterministics[0].name)
+
+trcs = atmcmc.ATMIP_sample(
+                        n_steps=n_steps,
+                        step=step,
+                        njobs=njobs,
+                        progressbar=True,
+                        trace=test_folder,
+                        model=mixedEffect_model)
+
+pm.summary(trcs)
+Pltr = pm.traceplot(trcs, combined=True)
+plt.show(Pltr[0][0])
 #%% plot advi and NUTS (copy from pymc3 example)
 from scipy import stats
 import seaborn as sns
