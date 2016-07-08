@@ -36,7 +36,7 @@ Y       = np.asarray(Y)
 w0 = [5,1,2,3,1,1]
 z0 = np.random.normal(size=(N,))
 Pheno   = np.dot(X,w0) + np.dot(L,z0) + Y.flatten()
-#%%
+
 with pm.Model() as mixedEffect_model:
     ### hyperpriors
     h2     = pm.Uniform('h2')
@@ -45,16 +45,16 @@ with pm.Model() as mixedEffect_model:
     w = pm.Normal('w', mu = 0, sd = 100, shape=M)
     z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
     g = T.dot(L,z)
-    y = pm.Normal('y', mu = g + T.dot(X,w), 
-                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
-    
+#    y = pm.Normal('y', mu = g + T.dot(X,w), 
+#                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
+    like = pm.Potential('like', pm.Normal.dist(mu = g + T.dot(X,w), 
+                  sd= ((1-h2)*sigma2)**0.5).logp(Pheno))
 #%% advi
 with mixedEffect_model:
     means, sds, elbos = pm.variational.advi(n=100000)
 #%% Metropolis
 with mixedEffect_model:
     trace = pm.sample(50000,step=pm.Metropolis())
-    trace = pm.sample(3000)
 #%% NUTS
 with mixedEffect_model:
     trace = pm.sample(3000)
@@ -68,19 +68,15 @@ njobs = 1
 from pymc3.step_methods import ATMCMC as atmcmc
 with mixedEffect_model:
     step = atmcmc.ATMCMC(n_chains=n_chains, tune_interval=tune_interval,
-                         likelihood_name=mixedEffect_model.deterministics[0].name)
+                         likelihood_name= 'like')
 
-trcs = atmcmc.ATMIP_sample(
+trace = atmcmc.ATMIP_sample(
                         n_steps=n_steps,
                         step=step,
                         njobs=njobs,
                         progressbar=True,
                         trace=test_folder,
                         model=mixedEffect_model)
-
-pm.summary(trcs)
-Pltr = pm.traceplot(trcs, combined=True)
-plt.show(Pltr[0][0])
 #%% plot advi and NUTS (copy from pymc3 example)
 from scipy import stats
 import seaborn as sns
@@ -105,7 +101,7 @@ fig.tight_layout()
 pm.traceplot(trace[0::2]) # 
 plt.show()
 
-burnin = 2000
+burnin = 20000
 df_summary1 = pm.df_summary(trace[burnin:],varnames=['w'])
 wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
