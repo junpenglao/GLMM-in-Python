@@ -9,11 +9,9 @@ A comparison among:
 [TensorFlow](https://github.com/tensorflow/tensorflow)  
 [Stan](https://github.com/stan-dev/stan) and [pyStan](https://github.com/stan-dev/pystan)  
 
-## More information (codes) could be found (to name a few):  
-[paul-buerkner/brms](https://github.com/paul-buerkner/brms)
-[vasishth/BayesLMMTutorial](https://github.com/vasishth/BayesLMMTutorial)
-[jonsedar/pymc3_vs_pystan](https://github.com/jonsedar/pymc3_vs_pystan)
-[Example from PyMC3](http://pymc-devs.github.io/pymc3/notebooks/GLM-hierarchical.html)
-[tyarkoni/nipymc](https://github.com/tyarkoni/nipymc)
-
-
+## More information (codes) could be found below (to name a few):  
+[paul-buerkner/brms](https://github.com/paul-buerkner/brms)  
+[vasishth/BayesLMMTutorial](https://github.com/vasishth/BayesLMMTutorial)  
+[jonsedar/pymc3_vs_pystan](https://github.com/jonsedar/pymc3_vs_pystan)  
+[Example from PyMC3](http://pymc-devs.github.io/pymc3/notebooks/GLM-hierarchical.html)  
+[tyarkoni/nipymc](https://github.com/tyarkoni/nipymc)  
