@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+"""
+example from pymc-dev
+"""
 import pymc3 as pm
 import theano.tensor as T
 from numpy import random, sum as nsum, ones, concatenate, newaxis, dot, arange
