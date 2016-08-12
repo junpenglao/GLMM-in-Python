@@ -9,6 +9,11 @@ A comparison among:
 [TensorFlow](https://github.com/tensorflow/tensorflow)  
 [Stan](https://github.com/stan-dev/stan) and [pyStan](https://github.com/stan-dev/pystan)  
 
+## TODO
+K-Fold Cross Validation and Leave-One-Out (LOO)  
+[WAIC and cross-validation in Stan](http://www.stat.columbia.edu/~gelman/research/unpublished/waic_stan.pdf)  
+[tyarkoni/PPS2016](https://github.com/tyarkoni/PPS2016)
+
 ## More information (codes) could be found below (to name a few):  
 [paul-buerkner/brms](https://github.com/paul-buerkner/brms)  
 [vasishth/BayesLMMTutorial](https://github.com/vasishth/BayesLMMTutorial)  
