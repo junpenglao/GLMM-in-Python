@@ -10,6 +10,8 @@ A comparison among:
 [Stan](https://github.com/stan-dev/stan) and [pyStan](https://github.com/stan-dev/pystan)  
 
 ## TODO
+Estimate uncertainty related to model parameter using [dropout](http://mlg.eng.cam.ac.uk/yarin/blog_3d801aa532c1ce.html) in Theano and TensorFlow  
+[DROPOUT AS A BAYESIAN APPROXIMATION](http://mlg.eng.cam.ac.uk/yarin/publications.html#Gal2015Bayesian)  
 K-Fold Cross Validation and Leave-One-Out (LOO)  
 [WAIC and cross-validation in Stan](http://www.stat.columbia.edu/~gelman/research/unpublished/waic_stan.pdf)  
 [tyarkoni/PPS2016](https://github.com/tyarkoni/PPS2016)
