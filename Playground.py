@@ -81,6 +81,30 @@ fe_params = pd.DataFrame(mdf.fe_params,columns=['LMM'])
 random_effects = pd.DataFrame(mdf.random_effects)
 
 fitted=np.dot(X,mdf.fe_params)+np.dot(Z,mdf.random_effects).flatten()
+#%% Bambi
+from bambi import Model
+from scipy.stats import norm
+
+# Assume we already have our data loaded
+model = Model(tbltest)
+model.add_formula(formula)
+model.build()
+
+p = len(model.terms)
+fig, axes = plt.subplots(int(np.ceil(p/2)), 2, figsize=(12,np.ceil(p/2)*2))
+
+for i,t in enumerate(model.terms.values()):
+    m = t.prior.args['mu']
+    sd = np.asscalar(t.prior.args['sd'])
+    x = np.linspace(m - 3*sd, m + 3*sd, 100)
+    y = norm.pdf(x, loc=m, scale=sd)
+    axes[divmod(i,2)[0], divmod(i,2)[1]].plot(x,y)
+    axes[divmod(i,2)[0], divmod(i,2)[1]].set_title(t.name)
+plt.subplots_adjust(wspace=.25, hspace=.5)
+
+results = model.fit(formula, random=['1|subj'], samples=5000)
+_ = results.plot(burn_in=1000)
+results.summary(1000)
 #%% edward
 import edward as ed
 import tensorflow as tf
