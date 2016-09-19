@@ -103,15 +103,18 @@ for i,t in enumerate(model.terms.values()):
 plt.subplots_adjust(wspace=.25, hspace=.5)
 
 results = model.fit(formula, random=['1|subj'], samples=5000)
-_ = results.plot(burn_in=1000)
-results.summary(1000)
+_ = results.plot(names=['b_Intercept','b_group','b_orientation',
+                           'b_identity','b_group:orientation','b_group:identity',
+                           'b_orientation:identity','b_group:orientation:identity'])
+_ = results.plot(names=['u_subj'])
+results.summary(burn_in=1000)
 #%% edward
 import edward as ed
 import tensorflow as tf
 from edward.models import Normal
 from edward.stats import norm
-#ed.set_seed(42)
-#%%
+ed.set_seed(42)
+
 class MixedModel:
     def __init__(self, lik_std=0.1, prior_std=1.0):
         self.lik_std = lik_std
