@@ -12,7 +12,7 @@ import matplotlib.pylab as plt
 plt.style.use('ggplot')
 M    = 6  # number of columns in X - fixed effect
 N    = 10 # number of columns in L - random effect
-nobs = 10
+nobs = 20
 
 # generate design matrix using patsy
 import statsmodels.formula.api as smf
@@ -39,7 +39,7 @@ Y       = np.asarray(Y)
 nfixed  = np.shape(X)
 nrandm  = np.shape(Z)
 # generate data
-w0 = [5.0, 1.0, 2.0, 13.0, 1.0, 1.0] + np.random.randn(6)
+w0 = [5.0, 1.0, 2.0, 8.0, 1.0, 1.0] + np.random.randn(6)
 #w0 -= np.mean(w0)
 #w0 = np.random.normal(size=(M,))
 z0 = np.random.normal(size=(N,))*10
@@ -199,6 +199,7 @@ for i in range(NEPOCH):
     info_dict = inference.update(feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
     train_loss[i] = info_dict['loss']
     test_loss[i] = sess.run(inference.loss, feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
+    print(i,test_loss[i])
     
 plt.figure()
 plt.plot(train_loss,label = 'Train')
