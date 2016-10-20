@@ -39,7 +39,7 @@ Y       = np.asarray(Y)
 nfixed  = np.shape(X)
 nrandm  = np.shape(Z)
 # generate data
-w0 = [5.0, 1.0, 2.0, 13.0, 1.0, 1.0]
+w0 = [5.0, 1.0, 2.0, 13.0, 1.0, 1.0] + np.random.randn(6)
 #w0 -= np.mean(w0)
 #w0 = np.random.normal(size=(M,))
 z0 = np.random.normal(size=(N,))*10
@@ -108,13 +108,13 @@ _ = results.plot(names=['b_Intercept','b_group','b_orientation',
                            'b_orientation:identity','b_group:orientation:identity'])
 _ = results.plot(names=['u_subj'])
 results.summary(burn_in=1000)
-#%% edward
-import edward as ed
+#%% variational inference (using Edward)
 import tensorflow as tf
+import edward as ed
 from edward.models import Normal
 from edward.stats import norm
-ed.set_seed(42)
-
+#ed.set_seed(42)
+#
 class MixedModel:
     def __init__(self, lik_std=0.1, prior_std=1.0):
         self.lik_std = lik_std
@@ -143,7 +143,7 @@ X1     = X[:,1:]
 #X_mean = np.mean(X1,axis=0) # column means of X before centering 
 #X_cent = X1 - X_mean
 #x_train, y_train = X_cent , Y
-x_train, y_train = X1 , Y
+x_train, y_train = X1 , Y.flatten()
 D  = x_train.shape[1]  # num features
 Db = Z.shape[1]
 
@@ -156,62 +156,56 @@ qw_mu = tf.Variable(tf.random_normal([D,1]))
 qw_sigma = tf.nn.softplus(tf.Variable(tf.random_normal([D,1])))
 qw = Normal(mu=qw_mu, sigma=qw_sigma)
 
-qb_mu = tf.Variable(tf.random_normal([Db,1]))
+#qb_mu = tf.Variable(tf.random_normal([Db,1]))
+qb_mu = tf.Variable(tf.random_normal([Db,1])) #force the random coeff to be zero-distributed
+qb_mu = qb_mu - tf.reduce_mean(qb_mu)
 qb_sigma = tf.nn.softplus(tf.Variable(tf.random_normal([Db,1])))
 qb = Normal(mu=qb_mu, sigma=qb_sigma)
 
 zs   = {'beta': qw, 'b': qb, 'Intercept': qi}
 
-##%% model fitting opt 1
-#model = MixedModel(lik_std=.1,prior_std=100.0)
-#
-#sess = ed.get_session()
-#data = {'X': x_train, 'y': y_train, 'Z': Z}
-#inference = ed.MFVI(zs, data, model)
-#inference.run(n_iter=50000, n_print=10000)
-#
-#"""
-#Observation: if the ratio between the fixed effect and the random effect is large,
-#The model needs more iteration to converge.
-#Also, if either the fixed effect or the random effect is not normal distributed,
-#the fitting is not going to perform well
-#"""
-
-##%% model fitting opt 2
 Xnew = ed.placeholder(tf.float32, shape=(None, D))
 Znew = ed.placeholder(tf.float32, shape=(None, Db))
-ynew = ed.placeholder(tf.float32, shape=(None))
+ynew = ed.placeholder(tf.float32, shape=(None, ))
 
 data = {'X': Xnew, 'y': ynew, 'Z': Znew}
 
-model = MixedModel(lik_std=10.0,prior_std=100.0)
+edmodel = MixedModel(lik_std=10.0,prior_std=100.0)
 
 sess = ed.get_session()
-inference = ed.MFVI(zs, data, model)
-#inference.initialize()
+inference = ed.MFVI(zs, data, edmodel)
 
 #optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
-optimizer = tf.train.RMSPropOptimizer(0.1, epsilon=1.0)
-#optimizer = tf.train.GradientDescentOptimizer(0.0001)
-inference.initialize(optimizer=optimizer)
+#optimizer = tf.train.RMSPropOptimizer(0.01, epsilon=1.0)
+optimizer = tf.train.GradientDescentOptimizer(0.001)
 
-NEPOCH = 10000
+inference.initialize(optimizer=optimizer, n_samples=10)
+
+init = tf.initialize_all_variables() 
+init.run() 
+
+NEPOCH = 5000
 train_loss = np.zeros(NEPOCH)
 test_loss = np.zeros(NEPOCH)
-#batch_xs, batch_zs, batch_ys = x_train,Z,y_train
-for i in range(NEPOCH):
-    sel = np.random.randint(0,nfixed[0],size=int(nfixed[0]/2))
-    batch_xs, batch_zs, batch_ys = x_train[sel,:],Z[sel,:],y_train[sel]
-    _, train_loss[i] = sess.run([inference.train, inference.loss],
-                              feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
-    test_loss[i] = sess.run(inference.loss, feed_dict={Xnew: x_train, ynew: y_train, Znew: Z})
+batch_xs, batch_zs, batch_ys = x_train, Z, y_train
 
+#for i in range(NEPOCH):
+#    #sel = np.random.randint(0,N,size=int(N/2))
+#    #batch_xs, batch_zs, batch_ys = x_train[sel,:],Z[sel,:],y_train[sel]
+#    _, train_loss[i] = sess.run([inference.train, inference.loss],
+#                              feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
+#    test_loss[i] = sess.run(inference.loss, feed_dict={Xnew: x_train, ynew: y_train, Znew: Z})
+for i in range(NEPOCH):
+    info_dict = inference.update(feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
+    train_loss[i] = info_dict['loss']
+    test_loss[i] = sess.run(inference.loss, feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
+    
 plt.figure()
 plt.plot(train_loss,label = 'Train')
 plt.plot(test_loss,label = 'Whole data')
 plt.legend(loc=4)
 plt.show()
-#%% display result
+
 i_mean, i_std, w_mean, w_std, b_mean, b_std = sess.run([qi.mu, qi.sigma, qw.mu,
                                                         qw.sigma,qb.mu, qb.sigma])
 
@@ -230,6 +224,9 @@ print(random_effects)
 
 print("The MSE of LMM is " + str(np.mean(np.square(Y-fitted))))
 print("The MSE of Edward is " + str(np.mean(np.square(Y-fitted_ed))))
+
+fe_params.plot()
+random_effects.plot()
 
 plt.figure()
 plt.plot(Y,label = 'Observed')
@@ -314,26 +311,42 @@ inference = ed.MFVI(zs_wn, data, model_wn)
 #inference.initialize()
 
 #optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
-optimizer = tf.train.RMSPropOptimizer(0.1, epsilon=1.0)
-#optimizer = tf.train.GradientDescentOptimizer(0.0001)
-inference.initialize(optimizer=optimizer,n_print=1000)
+#optimizer = tf.train.RMSPropOptimizer(0.01, epsilon=1.0)
+optimizer = tf.train.GradientDescentOptimizer(0.001)
 
-NEPOCH = 10000
+inference.initialize(optimizer=optimizer, n_samples=10)
+
+init = tf.initialize_all_variables() 
+init.run() 
+
+NEPOCH = 5000
 train_loss = np.zeros(NEPOCH)
 test_loss = np.zeros(NEPOCH)
-#batch_xs, batch_zs, batch_ys = x_train,Z,y_train
+batch_xs, batch_zs, batch_ys = x_train, Z, y_train
+
 for i in range(NEPOCH):
-    sel = np.random.randint(0,nfixed[0],size=int(nfixed[0]/2))
-    batch_xs, batch_zs, batch_ys = x_train[sel,:],Z[sel,:],y_train[sel]
-    _, train_loss[i] = sess.run([inference.train, inference.loss],
-                              feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
-    test_loss[i] = sess.run(inference.loss, feed_dict={Xnew: x_train, ynew: y_train, Znew: Z})
-    if i % inference.n_print == 0:
-        epstmp = sess.run([qeps.mean()])
-        print("iter {:d} eps {:.2f}".format(i, epstmp[0]))
-        
+    info_dict = inference.update(feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
+    train_loss[i] = info_dict['loss']
+    test_loss[i] = sess.run(inference.loss, feed_dict={Xnew: batch_xs, ynew: batch_ys, Znew: batch_zs})
+    
 plt.figure()
 plt.plot(train_loss,label = 'Train')
 plt.plot(test_loss,label = 'Whole data')
 plt.legend(loc=4)
 plt.show()
+
+i_mean, i_std, w_mean, w_std, b_mean, b_std = sess.run([qi.mu, qi.sigma, qw.mu,
+                                                        qw.sigma,qb.mu, qb.sigma])
+
+#fixed_ed  = np.hstack([i_mean+b_mean.mean(),w_mean.flatten()])
+#randm_ed  = b_mean-b_mean.mean()
+fixed_ed  = np.hstack([i_mean,w_mean.flatten()])
+randm_ed  = b_mean
+
+fitted_ed = np.dot(X,fixed_ed)+np.dot(Z,randm_ed).flatten()
+
+fe_params['edward2'] = pd.Series(fixed_ed, index=fe_params.index)
+random_effects['edward2'] = pd.Series(randm_ed.flatten(), index=random_effects.index)
+
+print(fe_params)
+print(random_effects)

@@ -33,7 +33,7 @@ X       = np.asarray(X) # fixed effect
 L       = np.asarray(L) # mixed effect
 Y       = np.asarray(Y) 
 # generate data
-w0 = [5,1,2,3,1,1]
+w0 = [5.,1.,2.,3.,1.,1.]
 z0 = np.random.normal(size=(N,))
 Pheno   = np.dot(X,w0) + np.dot(L,z0) + Y.flatten()
 
