@@ -9,6 +9,8 @@ A comparison among:
 [TensorFlow](https://github.com/tensorflow/tensorflow)  
 [Stan](https://github.com/stan-dev/stan) and [pyStan](https://github.com/stan-dev/pystan)  
 
+Whenever I try on some new machine learning or statistical package, I will fit a mixed effect model. It is better than linear regression (or MNIST for that matter, as it is just a large logistic regression) since linear regressions are almost too easy to fit. Hence this collection of codes all doing the same thing.
+
 ## TODO
 Estimate uncertainty related to model parameter using [dropout](http://mlg.eng.cam.ac.uk/yarin/blog_3d801aa532c1ce.html) in Theano and TensorFlow  
 [DROPOUT AS A BAYESIAN APPROXIMATION](http://mlg.eng.cam.ac.uk/yarin/publications.html#Gal2015Bayesian)  
