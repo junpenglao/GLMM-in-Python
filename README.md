@@ -8,8 +8,10 @@ A comparison among:
 [PyMC3](https://github.com/pymc-devs/pymc3)(Base on Theano)  
 [TensorFlow](https://github.com/tensorflow/tensorflow)  
 [Stan](https://github.com/stan-dev/stan) and [pyStan](https://github.com/stan-dev/pystan)  
+[Keras](https://github.com/fchollet/keras)  
+[edward](https://github.com/blei-lab/edward)  
 
-Whenever I try on some new machine learning or statistical package, I will fit a mixed effect model. It is better than linear regression (or MNIST for that matter, as it is just a large logistic regression) since linear regressions are almost too easy to fit. Hence this collection of codes all doing the same thing.
+Whenever I try on some new machine learning or statistical package, I will fit a mixed effect model. It is better than linear regression (or MNIST for that matter, as it is just a large logistic regression) since linear regressions are almost too easy to fit. Hence this collection of codes that all doing (more or less) the same thing.
 
 ## TODO
 Estimate uncertainty related to model parameter using [dropout](http://mlg.eng.cam.ac.uk/yarin/blog_3d801aa532c1ce.html) in Theano and TensorFlow  
