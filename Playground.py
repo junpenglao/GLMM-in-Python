@@ -75,9 +75,9 @@ Terms  = X.design_info.column_names
 _, Z   = dmatrices('rt ~ -1+subj', data=tbltest, return_type='matrix')
 X      = np.asarray(X) # fixed effect
 Z      = np.asarray(Z) # mixed effect
-Y      = np.asarray(Y).flatten()
-nfixed = np.shape(X)
-nrandm = np.shape(Z)
+Y      = np.asarray(Y)
+N,nfixed = np.shape(X)
+_,nrandm = np.shape(Z)
 fe_params = pd.DataFrame(mdf.fe_params,columns=['LMM'])
 random_effects = pd.DataFrame(mdf.random_effects)
 random_effects = random_effects.transpose()
@@ -143,6 +143,187 @@ fixpymc = np.asarray(fixpymc)
 fe_params['PyMC'] = pd.Series(fixpymc.flatten(), index=fe_params.index)
 random_effects['PyMC'] = pd.Series(results.trace["u_subj"][burn_in:].mean(0),
                          index=random_effects.index)
+#%% Tensorflow
+import tensorflow as tf
+
+tf.reset_default_graph()
+def tfmixedmodel(X, beta, Z, b):
+    with tf.name_scope("fixedEffect"):
+        fe = tf.matmul(X, beta)
+    with tf.name_scope("randomEffect"):
+        re = tf.matmul(Z, b)
+    #randcoef = tf.matmul(Z, b)
+    #Xnew     = tf.transpose(X) * tf.transpose(randcoef)
+    #y_pred   = tf.matmul(tf.transpose(Xnew), beta)
+    return tf.add(fe,re) # notice we use the same model as linear regression, 
+                  # this is because there is a baked in cost function which performs softmax and cross entropy
+
+Xtf      = tf.placeholder("float32", [None, nfixed]) # create symbolic variables
+Ztf      = tf.placeholder("float32", [None, nrandm])
+y        = tf.placeholder("float32", [None, 1])
+beta_tf  = tf.Variable(tf.random_normal([nfixed, 1], stddev=1, name="fixed_beta"))
+b_tf     = tf.Variable(tf.random_normal([nrandm, 1], stddev=1, name="random_b"))
+b_tf     = b_tf - tf.reduce_mean(b_tf)
+eps_tf   = tf.Variable(tf.random_normal([0], stddev=1, name="eps"))
+y_       = tfmixedmodel(Xtf, beta_tf, Ztf, b_tf)
+#y_    = tf.nn.softmax(tf.matmul(Xtf, beta) + tf.matmul(Ztf, b) + eps)
+
+# Add histogram summaries for weights
+tf.summary.histogram("fixed", beta_tf)
+tf.summary.histogram("random", b_tf)
+
+nb_epoch   = 5000
+batch_size = 100
+with tf.name_scope("cost"):
+    #cost = tf.reduce_sum(tf.pow(y - y_, 2))
+    #train_step    = tf.train.RMSPropOptimizer(0.01, epsilon=1.0).minimize(cost)
+    cost        = tf.reduce_mean(tf.square(y - y_)) # use square error for cost function
+    train_step  = tf.train.GradientDescentOptimizer(0.01).minimize(cost)
+    # Add scalar summary for cost
+    tf.summary.scalar("cost", cost)
+
+with tf.name_scope("SSE"):
+    sse = tf.reduce_mean(tf.cast(cost, tf.float32))
+    # Add scalar summary for SSE
+    tf.summary.scalar("SSE", sse)
+
+with tf.Session() as sess:
+    # create a log writer. run 'tensorboard --logdir=/tmp/GLMMtest'
+    writer = tf.summary.FileWriter("/tmp/GLMMtest", sess.graph) # for 0.8
+    merged = tf.summary.merge_all()
+
+    # you need to initialize all variables
+    tf.global_variables_initializer().run()
+    for i in range(nb_epoch):
+        shuffleidx = np.random.permutation(N)
+        for start, end in zip(range(0, N, batch_size), range(batch_size, N, batch_size)):
+            batch_xs, batch_zs, batch_ys = X[shuffleidx[start:end]],Z[shuffleidx[start:end]],Y[shuffleidx[start:end]]
+            sess.run(train_step, feed_dict={Xtf: batch_xs, Ztf: batch_zs, y: batch_ys})
+        summary, acc = sess.run([merged, sse], 
+                                feed_dict={Xtf: X, Ztf: Z, y: Y})
+        writer.add_summary(summary, i)  # Write summary
+        if (i % 100 == 0):
+            print(i, acc)
+    
+    betatf = sess.run(beta_tf)
+    btf    = sess.run(b_tf)    
+    
+fe_params['TF'] = pd.Series(betatf.flatten(), index=fe_params.index)
+random_effects['TF'] = pd.Series(btf.flatten(), index=random_effects.index)
+#%% variational inference (using tensorflow)
+"""
+Using mean field variational inference on ELBO as explained in
+https://github.com/blei-lab/edward/blob/master/edward/inferences/klqp.py
+WARNING: SLOW
+"""
+tf.reset_default_graph()
+Xtf      = tf.placeholder("float32", [None, nfixed]) # create symbolic variables
+Ztf      = tf.placeholder("float32", [None, nrandm])
+y        = tf.placeholder("float32", [None, 1])
+
+priorstd = 1
+from tensorflow.contrib.distributions import Normal
+
+#fixed effect
+eps_fe   = tf.random_normal([nfixed, 1], name='eps_fe')
+beta_mu  = tf.Variable(tf.random_normal([nfixed, 1], stddev=priorstd), name="fixed_mu")
+
+##diag cov
+beta_logvar  = tf.Variable(tf.random_normal([nfixed, 1], stddev=priorstd), name="fixed_logvar")
+std_encoder1 = tf.exp(0.5 * beta_logvar)
+beta_tf      = Normal(mu=beta_mu,sigma=std_encoder1)
+
+#random effect
+eps_rd   = tf.random_normal([nrandm, 1], name='eps_rd')
+b_mu     = tf.Variable(tf.random_normal([nrandm, 1], stddev=priorstd), name="randm_mu")
+b_mu     = b_mu - tf.reduce_mean(b_mu)
+
+b_logvar     = tf.Variable(tf.random_normal([nrandm, 1], stddev=priorstd), name="randm_logvar")
+std_encoder2 = tf.exp(0.5 * b_logvar)
+b_tf         = Normal(mu=b_mu,sigma=std_encoder2)
+
+# MixedModel
+y_mu     = tfmixedmodel(Xtf, beta_mu, Ztf, b_mu)
+
+# Add histogram summaries for weights
+tf.summary.histogram("fixed",  beta_mu)
+tf.summary.histogram("random", b_mu)
+
+nb_epoch   = 1000
+batch_size = 100
+
+priormu, priorsigma, priorliksigma= 0.0, 100.0, 10.0
+n_samples = 5 #5-10 might be enough
+with tf.name_scope("cost"):
+    #mean_squared_error
+    RSEcost  = tf.reduce_mean(tf.square(y - y_mu)) # use square error for cost function
+    
+#    #negative log-likelihood (same as maximum-likelihood)
+#    y_sigma  = tf.sqrt(tfmixedmodel(Xtf, tf.square(std_encoder1), Ztf, tf.square(std_encoder2)))
+#    NLLcost  = - tf.reduce_sum(-0.5 * tf.log(2. * np.pi) - tf.log(y_sigma)
+#                               -0.5 * tf.square((y - y_mu)/y_sigma))
+
+    #Mean-field Variational inference using ELBO
+    p_log_prob = [0.0] * n_samples
+    q_log_prob = [0.0] * n_samples
+    for s in range(n_samples):
+        beta_tf_copy = Normal(mu=beta_mu,sigma=std_encoder1)
+        beta_sample  = beta_tf_copy.sample()
+        q_log_prob[s] += tf.reduce_sum(beta_tf.log_prob(beta_sample))
+        b_tf_copy    = Normal(mu=b_mu,sigma=std_encoder2)
+        b_sample     = b_tf_copy.sample()
+        q_log_prob[s] += tf.reduce_sum(b_tf.log_prob(b_sample))
+        
+        priormodel    = Normal(mu=priormu,sigma=priorsigma)
+        y_sample      = tf.matmul(Xtf, beta_sample) + tf.matmul(Ztf, b_sample)
+        p_log_prob[s] += tf.reduce_sum(priormodel.log_prob(beta_sample))
+        p_log_prob[s] += tf.reduce_sum(priormodel.log_prob(b_sample))
+        modelcopy     = Normal(mu=y_sample,sigma=priorliksigma)
+        p_log_prob[s] += tf.reduce_sum(modelcopy.log_prob(y))
+        
+    p_log_prob = tf.stack(p_log_prob)
+    q_log_prob = tf.stack(q_log_prob)
+    ELBO = -tf.reduce_mean(p_log_prob - q_log_prob)
+    
+    #train_step    = tf.train.AdamOptimizer(0.01).minimize(NLLcost)
+    #train_step    = tf.train.AdagradOptimizer(0.1).minimize(ELBO)
+    #train_step    = tf.train.RMSPropOptimizer(0.01, epsilon=0.1).minimize(NLLcost)
+    train_step    = tf.train.GradientDescentOptimizer(0.01).minimize(ELBO)
+    
+    # Add scalar summary for cost
+    tf.summary.scalar("cost", ELBO)
+
+with tf.name_scope("MSE"):
+    sse = tf.reduce_mean(tf.cast(RSEcost, tf.float32))
+    # Add scalar summary for SSE
+    tf.summary.scalar("MSE", sse)
+
+with tf.Session() as sess:
+    # create a log writer. run 'tensorboard --logdir=/tmp/GLMMtest'
+    writer = tf.summary.FileWriter("/tmp/GLMMtest", sess.graph) # for 0.8
+    merged = tf.summary.merge_all()
+
+    # you need to initialize all variables
+    tf.global_variables_initializer().run()
+    for i in range(nb_epoch):
+        shuffleidx = np.random.permutation(N)
+        for start, end in zip(range(0, N, batch_size), range(batch_size, N, batch_size)):
+            batch_xs, batch_zs, batch_ys = X[shuffleidx[start:end]],Z[shuffleidx[start:end]],Y[shuffleidx[start:end]]
+            sess.run(train_step, feed_dict={Xtf: batch_xs, Ztf: batch_zs, y: batch_ys})
+        summary, acc = sess.run([merged, sse], 
+                                feed_dict={Xtf: X, Ztf: Z, y: Y})
+        writer.add_summary(summary, i)  # Write summary
+        if (i % 1000 == 0):
+            print(i, acc)
+    
+    betatf = sess.run(beta_mu)
+    btf    = sess.run(b_mu)
+    betatf_std = sess.run(std_encoder1)
+    btf_std    = sess.run(std_encoder2)
+    
+fe_params['TF_VA'] = pd.Series(betatf.flatten(), index=fe_params.index)
+random_effects['TF_VA'] = pd.Series(btf.flatten(), index=random_effects.index)
+sess.close()
 #%% variational inference (using Edward)
 import edward as ed
 import tensorflow as tf
@@ -265,3 +446,45 @@ fitted_ed = np.dot(X,fixed_ed)+np.dot(Z,randm_ed).flatten()
 
 fe_params['edward2'] = pd.Series(fixed_ed, index=fe_params.index)
 random_effects['edward2'] = pd.Series(randm_ed.flatten(), index=random_effects.index)
+#%% PyTorch
+import torch
+from torch.autograd import Variable
+dtype = torch.FloatTensor
+
+x_train,z_train,y_train = X.astype('float32'), Z.astype('float32'), Y.astype('float32')
+# Create random Tensors to hold inputs and outputs, and wrap them in Variables.
+Xt = Variable(torch.from_numpy(x_train), requires_grad=False)
+Zt = Variable(torch.from_numpy(z_train), requires_grad=False)
+y  = Variable(torch.from_numpy(y_train),  requires_grad=False)
+
+# Create random Tensors for weights, and wrap them in Variables.
+w1 = Variable(torch.randn(nfixed,1).type(dtype), requires_grad=True)
+w2 = Variable(torch.randn(nrandm,1).type(dtype), requires_grad=True)
+
+learning_rate = 1e-3
+for t in range(50000):
+  # Forward pass: compute predicted y using operations on Variables; we compute
+  # ReLU using our custom autograd operation.
+  y_pred = Xt.mm(w1) + Zt.mm(w2)
+
+  # Compute and print loss
+  loss = (y_pred - y).pow(2).mean()
+  if (t % 1000 == 0):
+    print(t, loss.data[0])
+
+  # Manually zero the gradients before running the backward pass
+  w1.grad.data.zero_()
+  w2.grad.data.zero_()
+
+  # Use autograd to compute the backward pass.
+  loss.backward()
+
+  # Update weights using gradient descent
+  w1.data -= learning_rate * w1.grad.data
+  w2.data -= learning_rate * w2.grad.data
+
+fe_params['PyTorch'] = pd.Series(w1.data.numpy().flatten(), index=fe_params.index)
+random_effects['PyTorch'] = pd.Series(w2.data.numpy().flatten(), index=random_effects.index)
+
+#%% ploting
+plotfitted(fe_params=fe_params,random_effects=random_effects,X=X,Z=Z,Y=Y)
