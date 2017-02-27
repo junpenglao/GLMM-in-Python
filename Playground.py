@@ -461,27 +461,27 @@ y  = Variable(torch.from_numpy(y_train),  requires_grad=False)
 w1 = Variable(torch.randn(nfixed,1).type(dtype), requires_grad=True)
 w2 = Variable(torch.randn(nrandm,1).type(dtype), requires_grad=True)
 
-learning_rate = 1e-3
+learning_rate = 1e-2
 for t in range(50000):
-  # Forward pass: compute predicted y using operations on Variables; we compute
-  # ReLU using our custom autograd operation.
-  y_pred = Xt.mm(w1) + Zt.mm(w2)
+    # Forward pass: compute predicted y using operations on Variables; we compute
+    # ReLU using our custom autograd operation.
+    y_pred = Xt.mm(w1) + Zt.mm(w2)
 
-  # Compute and print loss
-  loss = (y_pred - y).pow(2).mean()
-  if (t % 1000 == 0):
-    print(t, loss.data[0])
+    # Compute and print loss
+    loss = (y_pred - y).pow(2).mean()
+    if (t % 1000 == 0):
+        print(t, loss.data[0])
 
-  # Manually zero the gradients before running the backward pass
-  w1.grad.data.zero_()
-  w2.grad.data.zero_()
+    # Manually zero the gradients before running the backward pass
+    w1.grad.data.zero_()
+    w2.grad.data.zero_()
 
-  # Use autograd to compute the backward pass.
-  loss.backward()
+    # Use autograd to compute the backward pass.
+    loss.backward()
 
-  # Update weights using gradient descent
-  w1.data -= learning_rate * w1.grad.data
-  w2.data -= learning_rate * w2.grad.data
+    # Update weights using gradient descent
+    w1.data -= learning_rate * w1.grad.data
+    w2.data -= learning_rate * w2.grad.data
 
 fe_params['PyTorch'] = pd.Series(w1.data.numpy().flatten(), index=fe_params.index)
 random_effects['PyTorch'] = pd.Series(w2.data.numpy().flatten(), index=random_effects.index)
