@@ -10,8 +10,8 @@ Experiment with different package
 import numpy as np
 import matplotlib.pylab as plt
 import seaborn as sns
-M    = 6  # number of columns in X - fixed effect
-N    = 10 # number of columns in L - random effect
+M1   = 6  # number of columns in X - fixed effect
+N1   = 10 # number of columns in L - random effect
 nobs = 20
 
 # generate design matrix using patsy
@@ -28,7 +28,7 @@ tbltest             = pd.DataFrame(predictors, columns=['Condi1', 'Condi2', 'sub
 tbltest['Condi1']   = tbltest['Condi1'].astype('category')
 tbltest['Condi2']   = tbltest['Condi2'].astype('category')
 tbltest['subj']     = tbltest['subj'].astype('category')
-tbltest['tempresp'] = np.random.normal(size=(nobs*M*N,1))*10
+tbltest['tempresp'] = np.random.normal(size=(nobs*M1*N1,1))*10
 
 Y, X    = dmatrices("tempresp ~ Condi1*Condi2", data=tbltest, return_type='matrix')
 Terms   = X.design_info.column_names
@@ -36,13 +36,13 @@ _, Z    = dmatrices('tempresp ~ -1+subj', data=tbltest, return_type='matrix')
 X       = np.asarray(X) # fixed effect
 Z       = np.asarray(Z) # mixed effect
 Y       = np.asarray(Y) 
-nfixed  = np.shape(X)
-nrandm  = np.shape(Z)
+N,nfixed = np.shape(X)
+_,nrandm = np.shape(Z)
 # generate data
 w0 = [5.0, 1.0, 2.0, 8.0, 1.0, 1.0] + np.random.randn(6)
 #w0 -= np.mean(w0)
 #w0 = np.random.normal(size=(M,))
-z0 = np.random.normal(size=(N,))*10
+z0 = np.random.normal(size=(N1,))*10
 
 Pheno     = np.dot(X,w0) + np.dot(Z,z0) + Y.flatten()
 beta0     = np.linalg.lstsq(X,Pheno)
@@ -53,7 +53,7 @@ randmpred = np.argmax(Z,axis=1)
 tbltest['Pheno'] = Pheno
 md  = smf.mixedlm("Pheno ~ Condi1*Condi2", tbltest, groups=tbltest["subj"])
 mdf = md.fit()
-Y   = Pheno
+Y   = np.expand_dims(Pheno,axis=1)
 
 fitted=mdf.fittedvalues
 
@@ -449,6 +449,7 @@ random_effects['edward2'] = pd.Series(randm_ed.flatten(), index=random_effects.i
 #%% PyTorch
 import torch
 from torch.autograd import Variable
+import torch.optim as optim
 dtype = torch.FloatTensor
 
 x_train,z_train,y_train = X.astype('float32'), Z.astype('float32'), Y.astype('float32')
@@ -462,7 +463,10 @@ w1 = Variable(torch.randn(nfixed,1).type(dtype), requires_grad=True)
 w2 = Variable(torch.randn(nrandm,1).type(dtype), requires_grad=True)
 
 learning_rate = 1e-2
-for t in range(50000):
+params = [w1,w2]
+
+solver = optim.SGD(params, lr=learning_rate)
+for t in range(10000):
     # Forward pass: compute predicted y using operations on Variables; we compute
     # ReLU using our custom autograd operation.
     y_pred = Xt.mm(w1) + Zt.mm(w2)
@@ -472,17 +476,28 @@ for t in range(50000):
     if (t % 1000 == 0):
         print(t, loss.data[0])
 
-    # Manually zero the gradients before running the backward pass
-    w1.grad.data.zero_()
-    w2.grad.data.zero_()
-
-    # Use autograd to compute the backward pass.
+#    # Manually zero the gradients before running the backward pass
+#    w1.grad.data.zero_()
+#    w2.grad.data.zero_()
+#
+#    # Use autograd to compute the backward pass.
+#    loss.backward()
+#
+#    # Update weights using gradient descent
+#    w1.data -= learning_rate * w1.grad.data
+#    w2.data -= learning_rate * w2.grad.data
+    
+    # Backward
     loss.backward()
 
-    # Update weights using gradient descent
-    w1.data -= learning_rate * w1.grad.data
-    w2.data -= learning_rate * w2.grad.data
+    # Update
+    solver.step()
 
+    # Housekeeping
+    solver.zero_grad()
+#    for p in params:
+#        p.grad.data.zero_()
+        
 fe_params['PyTorch'] = pd.Series(w1.data.numpy().flatten(), index=fe_params.index)
 random_effects['PyTorch'] = pd.Series(w2.data.numpy().flatten(), index=random_effects.index)
 
