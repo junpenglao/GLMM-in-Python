@@ -87,6 +87,7 @@ trace = atmcmc.ATMIP_sample(n_steps=n_steps, step=step, njobs=njobs, progressbar
 # Pltr = pm.traceplot(trcs, combined=True)
 # plt.show(Pltr[0][0])
 #%% plot advi and NUTS (copy from pymc3 example)
+burnin = 1000
 from scipy import stats
 import seaborn as sns
 varnames = means.keys()
@@ -101,38 +102,55 @@ for var, ax in zip(varnames, axs):
         y = stats.norm(mu, sigma).pdf(x)
         ax.plot(x, y)
         if trace[var].ndim > 1:
-            t = trace[var][i]
+            t = trace[burnin:][var][i]
         else:
-            t = trace[var]
-        sns.distplot(t, kde=False, norm_hist=True, ax=ax)
+            t = trace[burnin:][var]
+        sns.distplot(t, kde=True, norm_hist=True, ax=ax)
 fig.tight_layout()
 #%%
 pm.traceplot(trace, combined=True)
 plt.show()
 
-burnin = 0
 df_summary1 = pm.df_summary(trace[burnin:],varnames=['w'])
 wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
+w_vi = means['w']
+z_vi = means['z']
+
 import statsmodels.formula.api as smf
 tbltest['Pheno'] = Pheno
 md  = smf.mixedlm("Pheno ~ Condi1*Condi2", tbltest, groups=tbltest["subj"])
 mdf = md.fit()
-fixed = np.asarray(mdf.fe_params).flatten()
+fe_params = pd.DataFrame(mdf.fe_params,columns=['LMM'])
+random_effects = pd.DataFrame(mdf.random_effects)
+random_effects = random_effects.transpose()
+random_effects = random_effects.rename(index=str, columns={'groups': 'LMM'})
 
-plt.figure()
-plt.plot(w0,'r')
-plt.plot(wpymc,'b')
-plt.plot(fixed,'g')
-plt.legend(['real','PyMC','LME'])
+fe_params['PyMC'] = pd.Series(wpymc, index=fe_params.index)
+random_effects['PyMC'] = pd.Series(zpymc, index=random_effects.index)
 
+fe_params['PyMC_vi'] = pd.Series(w_vi, index=fe_params.index)
+random_effects['PyMC_vi'] = pd.Series(z_vi, index=random_effects.index)
 
-plt.figure()
-plt.plot(Pheno,'r')
-fitted1=np.dot(X,wpymc).flatten()+np.dot(L,zpymc).flatten()
-plt.plot(fitted1,'b')
-fitted2=np.dot(X,mdf.fe_params)+np.dot(L,mdf.random_effects).flatten()
-plt.plot(fitted2,'g')
-plt.legend(['Observed','PyMC','LME'])
+# ploting function 
+def plotfitted(fe_params,random_effects,X,Z,Y):
+    plt.figure(figsize=(18,9))
+    ax1 = plt.subplot2grid((2,2), (0, 0))
+    ax2 = plt.subplot2grid((2,2), (0, 1))
+    ax3 = plt.subplot2grid((2,2), (1, 0), colspan=2)
+    
+    fe_params.plot(ax=ax1)
+    random_effects.plot(ax=ax2)
+    
+    ax3.plot(Y.flatten(),'o',color='k',label = 'Observed', alpha=.25)
+    for iname in fe_params.columns.get_values():
+        fitted = np.dot(X,fe_params[iname])+np.dot(Z,random_effects[iname]).flatten()
+        print("The MSE of "+iname+ " is " + str(np.mean(np.square(Y.flatten()-fitted))))
+        ax3.plot(fitted,lw=1,label = iname, alpha=.5)
+    ax3.legend(loc=0)
+    #plt.ylim([0,5])
+    plt.show()
+
+plotfitted(fe_params=fe_params,random_effects=random_effects,X=X,Z=L,Y=Pheno)
