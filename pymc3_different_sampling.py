@@ -6,6 +6,8 @@ Created on Wed Jun 29 07:44:43 2016
 """
 
 import numpy as np, pymc3 as pm, theano.tensor as T, matplotlib.pyplot as plt
+import theano
+floatX = theano.config.floatX
 
 M    = 6  # number of columns in X - fixed effect
 N    = 10 # number of columns in L - random effect
@@ -51,7 +53,24 @@ with pm.Model() as mixedEffect:
 #                  sd= ((1-h2)*sigma2)**0.5).logp(Pheno))
 #%% advi
 with mixedEffect:
+    # OLD ADVI api
     means, sds, elbos = pm.variational.advi(n=100000)
+    
+    # New ADVI api
+    s = theano.shared(pm.floatX(1))
+    inference = pm.ADVI(cost_part_grad_scale=s)
+    # ADVI has nearly converged
+    inference.fit(n=20000)
+    # It is time to set `s` to zero
+    s.set_value(0)
+    approx = inference.fit(n=10000)
+    trace_vi = approx.sample_vp(10000) 
+    
+    elbos1 = -inference.hist
+#%%
+plt.plot(elbos1, label='new ADVI', alpha=.3)
+plt.plot(elbos, label='old ADVI', alpha=.3)
+plt.legend()
 #%% Metropolis
 with mixedEffect:
     trace = pm.sample(50000,step=pm.Metropolis())
@@ -93,8 +112,10 @@ import seaborn as sns
 varnames = means.keys()
 fig, axs = plt.subplots(nrows=len(varnames), figsize=(12, 18))
 for var, ax in zip(varnames, axs):
-    mu_arr = means[var]
-    sigma_arr = sds[var]
+    #mu_arr = means[var]
+    #sigma_arr = sds[var]
+    mu_arr = trace_vi[var].mean(axis=0)
+    sigma_arr = trace_vi[var].std(axis=0)
     ax.set_title(var)
     for i, (mu, sigma) in enumerate(zip(mu_arr.flatten(), sigma_arr.flatten())):
         sd3 = (-4*sigma + mu, 4*sigma + mu)
@@ -116,8 +137,11 @@ wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
-w_vi = means['w']
-z_vi = means['z']
+w_vi0 = means['w']
+z_vi0 = means['z']
+
+w_vi1 = trace_vi['w'].mean(axis=0)
+z_vi1 = trace_vi['z'].mean(axis=0)
 
 import statsmodels.formula.api as smf
 tbltest['Pheno'] = Pheno
@@ -131,8 +155,10 @@ random_effects = random_effects.rename(index=str, columns={'groups': 'LMM'})
 fe_params['PyMC'] = pd.Series(wpymc, index=fe_params.index)
 random_effects['PyMC'] = pd.Series(zpymc, index=random_effects.index)
 
-fe_params['PyMC_vi'] = pd.Series(w_vi, index=fe_params.index)
-random_effects['PyMC_vi'] = pd.Series(z_vi, index=random_effects.index)
+fe_params['PyMC_vi0'] = pd.Series(w_vi0, index=fe_params.index)
+random_effects['PyMC_vi0'] = pd.Series(z_vi0, index=random_effects.index)
+fe_params['PyMC_vi1'] = pd.Series(w_vi1, index=fe_params.index)
+random_effects['PyMC_vi1'] = pd.Series(z_vi1, index=random_effects.index)
 
 # ploting function 
 def plotfitted(fe_params,random_effects,X,Z,Y):
