@@ -368,10 +368,11 @@ sess = ed.get_session()
 inference = ed.KLqp({Wf: qw, Wb: qb, Ib: qi}, data={y: y_train})
 
 #optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
-optimizer = tf.train.RMSPropOptimizer(1., epsilon=1.0)
+#optimizer = tf.train.RMSPropOptimizer(1., epsilon=1.0)
 #optimizer = tf.train.GradientDescentOptimizer(0.01)
+#inference.run(optimizer=optimizer, n_samples=20, n_iter=10000)
 
-inference.run(optimizer=optimizer, n_samples=20, n_iter=10000)
+inference.run(n_samples=20, n_iter=10000)
 
 i_mean, i_std, w_mean, w_std, b_mean, b_std = sess.run([qi.mu, qi.sigma, qw.mu,
                                                         qw.sigma,qb.mu, qb.sigma])
