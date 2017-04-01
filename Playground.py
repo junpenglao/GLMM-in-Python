@@ -111,18 +111,27 @@ from scipy.stats import norm
 # Assume we already have our data loaded
 model = Model(tbltest)
 model.add(formula)
+model.add(random=['1|subj'], 
+          categorical=['group','orientation','identity','subj'])
+model.build(backend='pymc')
 
-p = len(model.terms)
-fig, axes = plt.subplots(int(np.ceil(p/2)), 2, figsize=(12,np.ceil(p/2)*2))
+# Plot prior
+#p = len(model.terms)
+#fig, axes = plt.subplots(int(np.ceil(p/2)), 2, figsize=(12,np.ceil(p/2)*2))
+#
+#for i, t in enumerate(model.terms.values()):
+#    m = t.prior.args['mu']
+#    sd = t.prior.args['sd']
+#    x = np.linspace(m - 3*sd, m + 3*sd, 100)
+#    y = norm.pdf(x, loc=m, scale=sd)
+#    axes[divmod(i,2)[0], divmod(i,2)[1]].plot(x,y)
+#    axes[divmod(i,2)[0], divmod(i,2)[1]].set_title(t.name)
+#plt.subplots_adjust(wspace=.25, hspace=.5)
 
-for i, t in enumerate(model.terms.values()):
-    m = t.prior.args['mu']
-    sd = t.prior.args['sd']
-    x = np.linspace(m - 3*sd, m + 3*sd, 100)
-    y = norm.pdf(x, loc=m, scale=sd)
-    axes[divmod(i,2)[0], divmod(i,2)[1]].plot(x,y)
-    axes[divmod(i,2)[0], divmod(i,2)[1]].set_title(t.name)
-plt.subplots_adjust(wspace=.25, hspace=.5)
+model.plot_priors(varnames=['Intercept','group','orientation',
+                           'identity','group:orientation','group:identity',
+                           'orientation:identity','group:orientation:identity'])
+plt.show()
 
 results = model.fit(formula, random=['1|subj'], 
                     categorical=['group','orientation','identity','subj'],
