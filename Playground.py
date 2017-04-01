@@ -19,7 +19,7 @@ import statsmodels.formula.api as smf
 from patsy import dmatrices
 import pandas as pd
 predictors = []
-for s1 in range(N):
+for s1 in range(N1):
     for c1 in range(2):
         for c2 in range(3):
             for i in range(nobs):
@@ -104,44 +104,42 @@ def plotfitted(fe_params=fe_params,random_effects=random_effects,X=X,Z=Z,Y=Y):
     plt.show()
 
 plotfitted(fe_params=fe_params,random_effects=random_effects,X=X,Z=Z,Y=Y)
-#%% Bambi
+#%% Bambi (tested on version 0.1.0)
 from bambi import Model
 from scipy.stats import norm
 
 # Assume we already have our data loaded
 model = Model(tbltest)
-model.add_formula(formula)
-model.build()
+model.add(formula)
 
 p = len(model.terms)
 fig, axes = plt.subplots(int(np.ceil(p/2)), 2, figsize=(12,np.ceil(p/2)*2))
 
-for i,t in enumerate(model.terms.values()):
+for i, t in enumerate(model.terms.values()):
     m = t.prior.args['mu']
-    sd = np.asscalar(t.prior.args['sd'])
+    sd = t.prior.args['sd']
     x = np.linspace(m - 3*sd, m + 3*sd, 100)
     y = norm.pdf(x, loc=m, scale=sd)
     axes[divmod(i,2)[0], divmod(i,2)[1]].plot(x,y)
     axes[divmod(i,2)[0], divmod(i,2)[1]].set_title(t.name)
 plt.subplots_adjust(wspace=.25, hspace=.5)
 
-results = model.fit(formula, random=['1|subj'], samples=5000)
-_ = results.plot(names=['b_Intercept','b_group','b_orientation',
-                           'b_identity','b_group:orientation','b_group:identity',
-                           'b_orientation:identity','b_group:orientation:identity'])
-_ = results.plot(names=['u_subj'])
-results.summary(burn_in=1000)
+results = model.fit(formula, random=['1|subj'], 
+                    categorical=['group','orientation','identity','subj'],
+                    samples=2000, chains=2)
+_ = results.plot(varnames=['Intercept','group','orientation',
+                           'identity','group:orientation','group:identity',
+                           'orientation:identity','group:orientation:identity'])
+_ = results.plot(varnames=['1|subj'])
 
 burn_in=1000
-names   = results.model.term_names
-fixpymc = []
-for fix in names[:-1]:
-    fixpymc.append(results.trace['b_'+fix][burn_in:].mean(0))
-    #print('b_'+fix+str(rt_fitted.trace['b_'+fix][burn_in:].mean(0)))
-fixpymc = np.asarray(fixpymc)
 
-fe_params['PyMC'] = pd.Series(fixpymc.flatten(), index=fe_params.index)
-random_effects['PyMC'] = pd.Series(results.trace["u_subj"][burn_in:].mean(0),
+summary = results[burn_in:].summary(ranefs=True)
+print(summary)
+# tracedf = results[burn_in:].to_df(ranefs=True)
+
+fe_params['Bambi'] = summary[summary.index.isin(fe_params.index)]['mean']
+random_effects['Bambi'] = pd.Series(np.asarray(summary.iloc[0:nrandm]['mean']),
                          index=random_effects.index)
 #%% Tensorflow
 import tensorflow as tf
