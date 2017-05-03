@@ -238,7 +238,7 @@ beta_mu  = tf.Variable(tf.random_normal([nfixed, 1], stddev=priorstd), name="fix
 ##diag cov
 beta_logvar  = tf.Variable(tf.random_normal([nfixed, 1], stddev=priorstd), name="fixed_logvar")
 std_encoder1 = tf.exp(0.5 * beta_logvar)
-beta_tf      = Normal(mu=beta_mu,sigma=std_encoder1)
+beta_tf      = Normal(loc=beta_mu, scale=std_encoder1)
 
 #random effect
 eps_rd   = tf.random_normal([nrandm, 1], name='eps_rd')
@@ -247,7 +247,7 @@ b_mu     = b_mu - tf.reduce_mean(b_mu)
 
 b_logvar     = tf.Variable(tf.random_normal([nrandm, 1], stddev=priorstd), name="randm_logvar")
 std_encoder2 = tf.exp(0.5 * b_logvar)
-b_tf         = Normal(mu=b_mu,sigma=std_encoder2)
+b_tf         = Normal(loc=b_mu, scale=std_encoder2)
 
 # MixedModel
 y_mu     = tfmixedmodel(Xtf, beta_mu, Ztf, b_mu)
@@ -274,18 +274,18 @@ with tf.name_scope("cost"):
     p_log_prob = [0.0] * n_samples
     q_log_prob = [0.0] * n_samples
     for s in range(n_samples):
-        beta_tf_copy = Normal(mu=beta_mu,sigma=std_encoder1)
+        beta_tf_copy = Normal(loc=beta_mu, scale=std_encoder1)
         beta_sample  = beta_tf_copy.sample()
         q_log_prob[s] += tf.reduce_sum(beta_tf.log_prob(beta_sample))
-        b_tf_copy    = Normal(mu=b_mu,sigma=std_encoder2)
+        b_tf_copy    = Normal(loc=b_mu, scale=std_encoder2)
         b_sample     = b_tf_copy.sample()
         q_log_prob[s] += tf.reduce_sum(b_tf.log_prob(b_sample))
         
-        priormodel    = Normal(mu=priormu,sigma=priorsigma)
+        priormodel    = Normal(loc=priormu, scale=priorsigma)
         y_sample      = tf.matmul(Xtf, beta_sample) + tf.matmul(Ztf, b_sample)
         p_log_prob[s] += tf.reduce_sum(priormodel.log_prob(beta_sample))
         p_log_prob[s] += tf.reduce_sum(priormodel.log_prob(b_sample))
-        modelcopy     = Normal(mu=y_sample,sigma=priorliksigma)
+        modelcopy     = Normal(loc=y_sample, scale=priorliksigma)
         p_log_prob[s] += tf.reduce_sum(modelcopy.log_prob(y))
         
     p_log_prob = tf.stack(p_log_prob)
@@ -332,6 +332,9 @@ fe_params['TF_VA'] = pd.Series(betatf.flatten(), index=fe_params.index)
 random_effects['TF_VA'] = pd.Series(btf.flatten(), index=random_effects.index)
 sess.close()
 #%% variational inference (using Edward)
+"""
+https://github.com/blei-lab/edward/blob/master/notebooks/linear_mixed_effects_models.ipynb
+"""
 import edward as ed
 import tensorflow as tf
 from edward.models import Normal
@@ -342,47 +345,49 @@ X1     = X[:,1:]
 #X_cent = X1 - X_mean
 #x_train, y_train = X_cent , Y
 x_train,z_train,y_train = X1.astype('float32'), Z.astype('float32'), Y.flatten()
-D  = x_train.shape[1]  # num features
+N, D = x_train.shape  # num features
 Db = z_train.shape[1]
 
+# Set up placeholders for the data inputs.
+Xnew = tf.placeholder(tf.float32, shape=(None, D))
+Znew = tf.placeholder(tf.float32, shape=(None, Db))
+
 # MODEL
-Wf = Normal(mu=tf.zeros([D]), sigma=tf.ones([D]))
-Wb = Normal(mu=tf.zeros([Db]), sigma=tf.ones([Db]))
-Ib = Normal(mu=tf.zeros(1), sigma=tf.ones(1))
+Wf = Normal(loc=tf.zeros([D]), scale=tf.ones([D]))
+Wb = Normal(loc=tf.zeros([Db]), scale=tf.ones([Db]))
+Ib = Normal(loc=tf.zeros([1]), scale=tf.ones(1))
 
 # INFERENCE
 qi_mu = tf.Variable(tf.random_normal([1]))
 qi_sigma = tf.nn.softplus(tf.Variable(tf.random_normal([1])))
-qi = Normal(mu=qi_mu, sigma=qi_sigma)
+qi = Normal(loc=qi_mu, scale=qi_sigma)
 
 #qw_mu = tf.expand_dims(tf.convert_to_tensor(beta0[0].astype(np.float32)),1)
 qw_mu = tf.Variable(tf.random_normal([D]))
 qw_sigma = tf.nn.softplus(tf.Variable(tf.random_normal([D])))
-qw = Normal(mu=qw_mu, sigma=qw_sigma)
+qw = Normal(loc=qw_mu, scale=qw_sigma)
 
 #qb_mu = tf.Variable(tf.random_normal([Db,1]))
 qb_mu = tf.Variable(tf.random_normal([Db])) #force the random coeff to be zero-distributed
 #qb_mu = qb_mu - tf.reduce_mean(qb_mu)
 qb_sigma = tf.nn.softplus(tf.Variable(tf.random_normal([Db])))
-qb = Normal(mu=qb_mu, sigma=qb_sigma)
-
-Xnew = tf.placeholder(tf.float32, shape=(None, D))
-Znew = tf.placeholder(tf.float32, shape=(None, Db))
-ynew = tf.placeholder(tf.float32, shape=(None, ))
-y  = Normal(mu=ed.dot(x_train, Wf)+ed.dot(z_train, Wb)+Ib, sigma=tf.ones(1))
+qb = Normal(loc=qb_mu, scale=qb_sigma)
+yhat = ed.dot(Xnew, Wf)+ed.dot(Znew, Wb)+Ib
+y  = Normal(loc=yhat, scale=tf.ones(N))
 
 sess = ed.get_session()
-inference = ed.KLqp({Wf: qw, Wb: qb, Ib: qi}, data={y: y_train})
+inference = ed.KLqp({Wf: qw, Wb: qb, Ib: qi},
+                    data={y: y_train, Xnew: x_train, Znew:z_train})
 
 #optimizer = tf.train.AdamOptimizer(0.01, epsilon=1.0)
-#optimizer = tf.train.RMSPropOptimizer(1., epsilon=1.0)
+optimizer = tf.train.RMSPropOptimizer(1., epsilon=1.0)
 #optimizer = tf.train.GradientDescentOptimizer(0.01)
-#inference.run(optimizer=optimizer, n_samples=20, n_iter=10000)
+inference.run(optimizer=optimizer, n_samples=20, n_iter=10000)
 
-inference.run(n_samples=20, n_iter=10000)
+#inference.run(n_samples=20, n_iter=20000)
 
-i_mean, i_std, w_mean, w_std, b_mean, b_std = sess.run([qi.mu, qi.sigma, qw.mu,
-                                                        qw.sigma,qb.mu, qb.sigma])
+i_mean, i_std, w_mean, w_std, b_mean, b_std = sess.run([qi.loc, qi.scale, qw.loc,
+                                                        qw.scale,qb.loc, qb.scale])
 
 #fixed_ed  = np.hstack([i_mean+b_mean.mean(),w_mean.flatten()])
 #randm_ed  = b_mean-b_mean.mean()
@@ -399,7 +404,7 @@ random_effects['edward'] = pd.Series(randm_ed.flatten(), index=random_effects.in
 import edward as ed
 import tensorflow as tf
 from edward.models import Normal, Empirical, InverseGamma
-        
+
 #DATA
 X1     = X[:,1:]
 #X_mean = np.mean(X1,axis=0) # column means of X before centering 
@@ -410,16 +415,17 @@ D  = x_train.shape[1]  # num features
 Db = z_train.shape[1]
 
 # MODEL
-Wf = Normal(mu=tf.zeros([D]), sigma=tf.ones([D]))
-Wb = Normal(mu=tf.zeros([Db]), sigma=tf.ones([Db]))
-Ib = Normal(mu=tf.zeros(1), sigma=tf.ones(1))
+Wf = Normal(loc=tf.zeros([D]), scale=tf.ones([D]))
+Wb = Normal(loc=tf.zeros([Db]), scale=tf.ones([Db]))
+Ib = Normal(loc=tf.zeros(1), scale=tf.ones(1))
 
 Xnew = tf.placeholder(tf.float32, shape=(None, D))
 Znew = tf.placeholder(tf.float32, shape=(None, Db))
 ynew = tf.placeholder(tf.float32, shape=(None, ))
 
-sigma2 = InverseGamma(alpha=tf.ones(1), beta=tf.ones(1))
-y  = Normal(mu=ed.dot(x_train, Wf)+ed.dot(z_train, Wb)+Ib, sigma=sigma2)
+sigma2 = InverseGamma(concentration=tf.ones(1)*.1, rate=tf.ones(1)*.1)
+#sigma2 = Normal(loc=tf.zeros([1]), scale=tf.ones([1])*100)
+y  = Normal(loc=ed.dot(x_train, Wf)+ed.dot(z_train, Wb)+Ib, scale=tf.log(sigma2))
 
 # INFERENCE
 sess = ed.get_session()
@@ -430,7 +436,7 @@ qb = Empirical(params=tf.Variable(tf.zeros([T, Db])))
 qsigma2 = Empirical(params=tf.Variable(tf.ones([T,1])))
 
 inference = ed.SGHMC({Wf: qw, Wb: qb, Ib: qi, sigma2: qsigma2}, data={y: y_train})
-inference.run(step_size=0.001)
+inference.run(step_size=.0005)
 
 f, (ax1, ax2, ax3, ax4) = plt.subplots(4, sharex=True)
 ax1.plot(qi.get_variables()[0].eval())
