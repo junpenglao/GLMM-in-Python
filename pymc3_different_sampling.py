@@ -53,10 +53,6 @@ with pm.Model() as mixedEffect:
 #                  sd= ((1-h2)*sigma2)**0.5).logp(Pheno))
 #%% advi
 with mixedEffect:
-    # OLD ADVI api
-    means, sds, elbos = pm.variational.advi(n=100000)
-    
-    # New ADVI api
     s = theano.shared(pm.floatX(1))
     inference = pm.ADVI(cost_part_grad_scale=s)
     # ADVI has nearly converged
@@ -64,64 +60,85 @@ with mixedEffect:
     # It is time to set `s` to zero
     s.set_value(0)
     approx = inference.fit(n=10000)
-    trace_vi = approx.sample_vp(10000) 
+    trace_vi = approx.sample(3000) 
     
     elbos1 = -inference.hist
+
+pm.traceplot(trace_vi, lines={'w':w0, 'z':z0});
 #%%
-plt.plot(elbos1, label='new ADVI', alpha=.3)
-plt.plot(elbos, label='old ADVI', alpha=.3)
+plt.plot(elbos1, alpha=.3)
 plt.legend()
-#%% Metropolis
-with mixedEffect:
-    trace = pm.sample(50000,step=pm.Metropolis())
 #%% NUTS
 with mixedEffect:
-    trace = pm.sample(3000)
+    trace = pm.sample(3000, njobs=2, tune=1000)
+    
+pm.traceplot(trace, lines={'w':w0, 'z':z0});
 #%% atmcmc
-test_folder = ('ATMIP_TEST')
+from tempfile import mkdtemp
+from pymc3.step_methods import smc
+test_folder = mkdtemp(prefix='ATMIP_TEST')
+
 n_chains = 500
 n_steps = 100
 tune_interval = 25
-njobs = 1
+n_jobs = 1
 
-from pymc3.step_methods import ATMCMC as atmcmc
 with pm.Model() as mixedEffect2:
     ### hyperpriors
     h2     = pm.Uniform('h2', transform=None)
-    sigma2 = pm.HalfCauchy('eps', 5, transform=None)
+    sigma2 = pm.HalfCauchy('sigma2', 5, transform=None)
     #beta_0 = pm.Uniform('beta_0', lower=-1000, upper=1000)   # a replacement for improper prior
     w = pm.Normal('w', mu = 0, sd = 100, shape=M)
     z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
     g = T.dot(L,z)
     y = pm.Normal('y', mu = g + T.dot(X,w), 
                   sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
-    like = pm.Deterministic('like', h2.logpt + sigma2.logpt + w.logpt + z.logpt + y.logpt)
-
-    step=atmcmc.ATMCMC(n_chains=n_chains, tune_interval=tune_interval, likelihood_name=mixedEffect2.deterministics[0].name)
     
-trace = atmcmc.ATMIP_sample(n_steps=n_steps, step=step, njobs=njobs, progressbar=True, model=mixedEffect2, trace='Test')
+    like = pm.Deterministic('like', 
+                            h2.logpt+sigma2.logpt+w.logpt+z.logpt+y.logpt)
+    llk = pm.Potential('like', like)
+    
+    step = smc.SMC(
+        n_chains=n_chains, tune_interval=tune_interval,
+        likelihood_name='like')
+    
+mtrace = smc.ATMIP_sample(
+                        n_steps=n_steps,
+                        step=step,
+                        n_jobs=n_jobs,
+                        progressbar=False,
+                        stage=0,
+                        homepath=test_folder,
+                        model=mixedEffect2,
+                        rm_flag=False)
 
-# trcs = pm.backends.text.load('Test/stage_30',    model=mixedEffect2)
-# trcs = pm.backends.text.load('Test/stage_final', model=mixedEffect2)
-# Pltr = pm.traceplot(trcs, combined=True)
-# plt.show(Pltr[0][0])
+#%%
+def last_sample(x):
+    return x[(n_steps - 1)::n_steps]
+
+axs = pm.traceplot(mtrace, transform=last_sample, combined=True,
+                   lines={'w':w0, 'z':z0});
 #%% plot advi and NUTS (copy from pymc3 example)
 burnin = 1000
 from scipy import stats
 import seaborn as sns
+
+gbij = approx.gbij
+means = gbij.rmap(approx.mean.eval())
+cov = approx.cov.eval()
+sds = gbij.rmap(np.diag(cov)**.5)
+
 varnames = means.keys()
 fig, axs = plt.subplots(nrows=len(varnames), figsize=(12, 18))
 for var, ax in zip(varnames, axs):
-    #mu_arr = means[var]
-    #sigma_arr = sds[var]
-    mu_arr = trace_vi[var].mean(axis=0)
-    sigma_arr = trace_vi[var].std(axis=0)
+    mu_arr = means[var]
+    sigma_arr = sds[var]
     ax.set_title(var)
     for i, (mu, sigma) in enumerate(zip(mu_arr.flatten(), sigma_arr.flatten())):
         sd3 = (-4*sigma + mu, 4*sigma + mu)
         x = np.linspace(sd3[0], sd3[1], 300)
         y = stats.norm(mu, sigma).pdf(x)
-        ax.plot(x, y)
+        ax.plot(x, y/4.)
         if trace[var].ndim > 1:
             t = trace[burnin:][var][i]
         else:
@@ -129,16 +146,16 @@ for var, ax in zip(varnames, axs):
         sns.distplot(t, kde=True, norm_hist=True, ax=ax)
 fig.tight_layout()
 #%%
-pm.traceplot(trace, combined=True)
-plt.show()
-
+burnin=1000
 df_summary1 = pm.df_summary(trace[burnin:],varnames=['w'])
 wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
-w_vi0 = means['w']
-z_vi0 = means['z']
+df_summary1 = pm.df_summary(mtrace,transform=last_sample,varnames=['w'])
+wpymc2 = np.asarray(df_summary1['mean'])
+df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
+zpymc2 = np.asarray(df_summary2['mean'])
 
 w_vi1 = trace_vi['w'].mean(axis=0)
 z_vi1 = trace_vi['z'].mean(axis=0)
@@ -155,10 +172,11 @@ random_effects = random_effects.rename(index=str, columns={'groups': 'LMM'})
 fe_params['PyMC'] = pd.Series(wpymc, index=fe_params.index)
 random_effects['PyMC'] = pd.Series(zpymc, index=random_effects.index)
 
-fe_params['PyMC_vi0'] = pd.Series(w_vi0, index=fe_params.index)
-random_effects['PyMC_vi0'] = pd.Series(z_vi0, index=random_effects.index)
-fe_params['PyMC_vi1'] = pd.Series(w_vi1, index=fe_params.index)
-random_effects['PyMC_vi1'] = pd.Series(z_vi1, index=random_effects.index)
+fe_params['PyMC_smc'] = pd.Series(wpymc2, index=fe_params.index)
+random_effects['PyMC_smc'] = pd.Series(zpymc2, index=random_effects.index)
+
+fe_params['PyMC_vi'] = pd.Series(w_vi1, index=fe_params.index)
+random_effects['PyMC_vi'] = pd.Series(z_vi1, index=random_effects.index)
 
 # ploting function 
 def plotfitted(fe_params,random_effects,X,Z,Y):
