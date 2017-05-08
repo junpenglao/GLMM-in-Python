@@ -154,7 +154,7 @@ zpymc = np.asarray(df_summary2['mean'])
 
 df_summary1 = pm.df_summary(mtrace,transform=last_sample,varnames=['w'])
 wpymc2 = np.asarray(df_summary1['mean'])
-df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
+df_summary2 = pm.df_summary(mtrace,transform=last_sample,varnames=['z'])
 zpymc2 = np.asarray(df_summary2['mean'])
 
 w_vi1 = trace_vi['w'].mean(axis=0)
