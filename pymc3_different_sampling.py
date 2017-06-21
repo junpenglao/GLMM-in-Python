@@ -96,7 +96,7 @@ with pm.Model() as mixedEffect2:
     
     like = pm.Deterministic('like', 
                             h2.logpt+sigma2.logpt+w.logpt+z.logpt+y.logpt)
-    llk = pm.Potential('like', like)
+    #llk = pm.Potential('like', like)
     
     step = smc.SMC(
         n_chains=n_chains, tune_interval=tune_interval,
