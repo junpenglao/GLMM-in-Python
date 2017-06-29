@@ -85,6 +85,7 @@ n_jobs = 1
 
 with pm.Model() as mixedEffect2:
     ### hyperpriors
+    # transform need to be None for SMC to work (transformed doesnt have random method)
     h2     = pm.Uniform('h2', transform=None)
     sigma2 = pm.HalfCauchy('sigma2', 5, transform=None)
     #beta_0 = pm.Uniform('beta_0', lower=-1000, upper=1000)   # a replacement for improper prior
@@ -94,22 +95,16 @@ with pm.Model() as mixedEffect2:
     y = pm.Normal('y', mu = g + T.dot(X,w), 
                   sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
     
-    like = pm.Deterministic('like', 
-                            h2.logpt+sigma2.logpt+w.logpt+z.logpt+y.logpt)
-    llk = pm.Potential('like', like)
-    
     step = smc.SMC(
-        n_chains=n_chains, tune_interval=tune_interval,
-        likelihood_name='like')
+        n_chains=n_chains, tune_interval=tune_interval)
     
-mtrace = smc.ATMIP_sample(
+    mtrace = smc.sample_smc(
                         n_steps=n_steps,
                         step=step,
                         n_jobs=n_jobs,
                         progressbar=False,
                         stage=0,
                         homepath=test_folder,
-                        model=mixedEffect2,
                         rm_flag=False)
 
 #%%
