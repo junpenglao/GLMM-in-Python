@@ -66,6 +66,7 @@ with mixedEffect:
 
 pm.traceplot(trace_vi, lines={'w':w0, 'z':z0});
 #%%
+plt.figure()
 plt.plot(elbos1, alpha=.3)
 plt.legend()
 #%% NUTS
@@ -85,6 +86,7 @@ n_jobs = 1
 
 with pm.Model() as mixedEffect2:
     ### hyperpriors
+    # Turn off transform otherwise random method make used by SMC does not work
     h2     = pm.Uniform('h2', transform=None)
     sigma2 = pm.HalfCauchy('sigma2', 5, transform=None)
     #beta_0 = pm.Uniform('beta_0', lower=-1000, upper=1000)   # a replacement for improper prior
@@ -92,32 +94,19 @@ with pm.Model() as mixedEffect2:
     z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
     g = T.dot(L,z)
     y = pm.Normal('y', mu = g + T.dot(X,w), 
-                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
+                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno)
     
-    like = pm.Deterministic('like', 
-                            h2.logpt+sigma2.logpt+w.logpt+z.logpt+y.logpt)
-    #llk = pm.Potential('like', like)
-    
-    step = smc.SMC(
-        n_chains=n_chains, tune_interval=tune_interval,
-        likelihood_name='like')
-    
-mtrace = smc.ATMIP_sample(
+mtrace = smc.sample_smc(
                         n_steps=n_steps,
-                        step=step,
+                        n_chains=n_chains,
+                        tune_interval=tune_interval,
                         n_jobs=n_jobs,
                         progressbar=False,
                         stage=0,
                         homepath=test_folder,
-                        model=mixedEffect2,
-                        rm_flag=False)
-
+                        model=mixedEffect2)
 #%%
-def last_sample(x):
-    return x[(n_steps - 1)::n_steps]
-
-axs = pm.traceplot(mtrace, transform=last_sample, combined=True,
-                   lines={'w':w0, 'z':z0});
+pm.traceplot(mtrace, lines={'w':w0, 'z':z0});
 #%% plot advi and NUTS (copy from pymc3 example)
 burnin = 1000
 from scipy import stats
@@ -152,9 +141,9 @@ wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
-df_summary1 = pm.df_summary(mtrace,transform=last_sample,varnames=['w'])
+df_summary1 = pm.df_summary(mtrace, varnames=['w'])
 wpymc2 = np.asarray(df_summary1['mean'])
-df_summary2 = pm.df_summary(mtrace,transform=last_sample,varnames=['z'])
+df_summary2 = pm.df_summary(mtrace, varnames=['z'])
 zpymc2 = np.asarray(df_summary2['mean'])
 
 w_vi1 = trace_vi['w'].mean(axis=0)
