@@ -72,7 +72,7 @@ plt.legend()
 #%% NUTS
 with mixedEffect:
     trace = pm.sample(3000, njobs=2, tune=1000)
-    
+
 pm.traceplot(trace, lines={'w':w0, 'z':z0});
 #%% atmcmc
 from tempfile import mkdtemp
@@ -96,10 +96,7 @@ with pm.Model() as mixedEffect2:
     y = pm.Normal('y', mu = g + T.dot(X,w), 
                   sd= ((1-h2)*sigma2)**0.5 , observed=Pheno)
     
-    step = smc.SMC(
-        n_chains=n_chains, tune_interval=tune_interval)
-    
-    mtrace = smc.sample_smc(
+mtrace = smc.sample_smc(
                         n_steps=n_steps,
                         n_chains=n_chains,
                         tune_interval=tune_interval,
@@ -107,8 +104,7 @@ with pm.Model() as mixedEffect2:
                         progressbar=False,
                         stage=0,
                         homepath=test_folder,
-                        rm_flag=False)
-
+                        model=mixedEffect2)
 #%%
 pm.traceplot(mtrace, lines={'w':w0, 'z':z0});
 #%% plot advi and NUTS (copy from pymc3 example)
