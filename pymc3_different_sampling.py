@@ -66,6 +66,7 @@ with mixedEffect:
 
 pm.traceplot(trace_vi, lines={'w':w0, 'z':z0});
 #%%
+plt.figure()
 plt.plot(elbos1, alpha=.3)
 plt.legend()
 #%% NUTS
@@ -93,14 +94,15 @@ with pm.Model() as mixedEffect2:
     z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
     g = T.dot(L,z)
     y = pm.Normal('y', mu = g + T.dot(X,w), 
-                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
+                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno)
     
     step = smc.SMC(
         n_chains=n_chains, tune_interval=tune_interval)
     
     mtrace = smc.sample_smc(
                         n_steps=n_steps,
-                        step=step,
+                        n_chains=n_chains,
+                        tune_interval=tune_interval,
                         n_jobs=n_jobs,
                         progressbar=False,
                         stage=0,
@@ -108,11 +110,7 @@ with pm.Model() as mixedEffect2:
                         rm_flag=False)
 
 #%%
-def last_sample(x):
-    return x[(n_steps - 1)::n_steps]
-
-axs = pm.traceplot(mtrace, transform=last_sample, combined=True,
-                   lines={'w':w0, 'z':z0});
+pm.traceplot(mtrace, lines={'w':w0, 'z':z0});
 #%% plot advi and NUTS (copy from pymc3 example)
 burnin = 1000
 from scipy import stats
@@ -147,9 +145,9 @@ wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
-df_summary1 = pm.df_summary(mtrace,transform=last_sample,varnames=['w'])
+df_summary1 = pm.df_summary(mtrace, varnames=['w'])
 wpymc2 = np.asarray(df_summary1['mean'])
-df_summary2 = pm.df_summary(mtrace,transform=last_sample,varnames=['z'])
+df_summary2 = pm.df_summary(mtrace, varnames=['z'])
 zpymc2 = np.asarray(df_summary2['mean'])
 
 w_vi1 = trace_vi['w'].mean(axis=0)
