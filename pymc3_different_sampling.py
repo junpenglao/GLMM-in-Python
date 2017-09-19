@@ -35,7 +35,7 @@ X       = np.asarray(X) # fixed effect
 L       = np.asarray(L) # mixed effect
 Y       = np.asarray(Y) 
 # generate data
-w0 = [5.,1.,2.,3.,1.,1.]
+w0 = [5.,1.5,2.,3.,1.1,1.25]
 z0 = np.random.normal(size=(N,))
 Pheno   = np.dot(X,w0) + np.dot(L,z0) + Y.flatten()
 
@@ -112,7 +112,7 @@ burnin = 1000
 from scipy import stats
 import seaborn as sns
 
-gbij = approx.gbij
+gbij = approx.bij
 means = gbij.rmap(approx.mean.eval())
 cov = approx.cov.eval()
 sds = gbij.rmap(np.diag(cov)**.5)
@@ -158,14 +158,14 @@ random_effects = pd.DataFrame(mdf.random_effects)
 random_effects = random_effects.transpose()
 random_effects = random_effects.rename(index=str, columns={'groups': 'LMM'})
 
-fe_params['PyMC'] = pd.Series(wpymc, index=fe_params.index)
-random_effects['PyMC'] = pd.Series(zpymc, index=random_effects.index)
+fe_params['NUTS'] = pd.Series(wpymc, index=fe_params.index)
+random_effects['NUTS'] = pd.Series(zpymc, index=random_effects.index)
 
-fe_params['PyMC_smc'] = pd.Series(wpymc2, index=fe_params.index)
-random_effects['PyMC_smc'] = pd.Series(zpymc2, index=random_effects.index)
+fe_params['SMC'] = pd.Series(wpymc2, index=fe_params.index)
+random_effects['SMC'] = pd.Series(zpymc2, index=random_effects.index)
 
-fe_params['PyMC_vi'] = pd.Series(w_vi1, index=fe_params.index)
-random_effects['PyMC_vi'] = pd.Series(z_vi1, index=random_effects.index)
+fe_params['MeanField'] = pd.Series(w_vi1, index=fe_params.index)
+random_effects['MeanField'] = pd.Series(z_vi1, index=random_effects.index)
 
 # ploting function 
 def plotfitted(fe_params,random_effects,X,Z,Y):
