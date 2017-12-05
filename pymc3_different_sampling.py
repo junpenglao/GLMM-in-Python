@@ -74,6 +74,16 @@ with mixedEffect:
     trace = pm.sample(3000, njobs=2, tune=1000)
 
 pm.traceplot(trace, lines={'w':w0, 'z':z0});
+#%% DEMetropolis
+with mixedEffect:
+    tracede = pm.sample(7000, njobs=10, tune=1000, step=pm.DEMetropolis())
+
+pm.traceplot(tracede, lines={'w':w0, 'z':z0});
+#%% DEMetropolis
+with mixedEffect:
+    tracem = pm.sample(7000, njobs=10, tune=1000, step=pm.DEMetropolis())
+
+pm.traceplot(tracem, lines={'w':w0, 'z':z0});
 #%% atmcmc
 from tempfile import mkdtemp
 from pymc3.step_methods import smc
@@ -135,15 +145,21 @@ for var, ax in zip(varnames, axs):
         sns.distplot(t, kde=True, norm_hist=True, ax=ax)
 fig.tight_layout()
 #%%
-burnin=1000
-df_summary1 = pm.df_summary(trace[burnin:],varnames=['w'])
+burnin=0
+df_summary1 = pm.summary(trace[burnin:],varnames=['w'])
 wpymc = np.asarray(df_summary1['mean'])
-df_summary2 = pm.df_summary(trace[burnin:],varnames=['z'])
+df_summary2 = pm.summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
-df_summary1 = pm.df_summary(mtrace, varnames=['w'])
+burnin=5000
+df_summary1 = pm.summary(tracede[burnin:],varnames=['w'])
+wpymcde = np.asarray(df_summary1['mean'])
+df_summary2 = pm.summary(tracede[burnin:],varnames=['z'])
+zpymcde = np.asarray(df_summary2['mean'])
+
+df_summary1 = pm.summary(mtrace, varnames=['w'])
 wpymc2 = np.asarray(df_summary1['mean'])
-df_summary2 = pm.df_summary(mtrace, varnames=['z'])
+df_summary2 = pm.summary(mtrace, varnames=['z'])
 zpymc2 = np.asarray(df_summary2['mean'])
 
 w_vi1 = trace_vi['w'].mean(axis=0)
@@ -160,6 +176,9 @@ random_effects = random_effects.rename(index=str, columns={'groups': 'LMM'})
 
 fe_params['NUTS'] = pd.Series(wpymc, index=fe_params.index)
 random_effects['NUTS'] = pd.Series(zpymc, index=random_effects.index)
+
+fe_params['DEM'] = pd.Series(wpymcde, index=fe_params.index)
+random_effects['DEM'] = pd.Series(zpymcde, index=random_effects.index)
 
 fe_params['SMC'] = pd.Series(wpymc2, index=fe_params.index)
 random_effects['SMC'] = pd.Series(zpymc2, index=random_effects.index)
