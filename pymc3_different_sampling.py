@@ -76,14 +76,9 @@ with mixedEffect:
 pm.traceplot(trace, lines={'w':w0, 'z':z0});
 #%% DEMetropolis
 with mixedEffect:
-    tracede = pm.sample(7000, njobs=10, tune=1000, step=pm.DEMetropolis())
+    tracede = pm.sample(5000, njobs=50, tune=1000, step=pm.DEMetropolis())
 
 pm.traceplot(tracede, lines={'w':w0, 'z':z0});
-#%% DEMetropolis
-with mixedEffect:
-    tracem = pm.sample(7000, njobs=10, tune=1000, step=pm.DEMetropolis())
-
-pm.traceplot(tracem, lines={'w':w0, 'z':z0});
 #%% atmcmc
 from tempfile import mkdtemp
 from pymc3.step_methods import smc
