@@ -148,8 +148,9 @@ print(summary)
 # tracedf = results[burn_in:].to_df(ranefs=True)
 
 fe_params['Bambi'] = summary[summary.index.isin(fe_params.index)]['mean']
-random_effects['Bambi'] = pd.Series(np.asarray(summary.iloc[0:nrandm]['mean']),
-                         index=random_effects.index)
+random_effects['Bambi'] = summary.loc[['1|subj['+ind_re+']'
+                                       for ind_re in random_effects.index]]['mean'].values
+
 #%% Tensorflow
 import tensorflow as tf
 
