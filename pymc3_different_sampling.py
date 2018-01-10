@@ -44,11 +44,11 @@ with pm.Model() as mixedEffect:
     h2     = pm.Uniform('h2')
     sigma2 = pm.HalfCauchy('sigma2', 5)
     #beta_0 = pm.Uniform('beta_0', lower=-1000, upper=1000)   # a replacement for improper prior
-    w = pm.Normal('w', mu = 0, sd = 100, shape=M)
-    z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
-    g = T.dot(L,z)
-    y = pm.Normal('y', mu = g + T.dot(X,w), 
-                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno )
+    w = pm.Normal('w', mu=0, sd=100, shape=M)
+    z = pm.Normal('z', mu=0, sd=(h2*sigma2)**0.5, shape=N)
+    g = T.dot(L, z)
+    y = pm.Normal('y', mu=g + T.dot(X,w), 
+                  sd=((1-h2)*sigma2)**0.5, observed=Pheno)
 #    like = pm.Potential('like', pm.Normal.dist(mu = g + T.dot(X,w), 
 #                  sd= ((1-h2)*sigma2)**0.5).logp(Pheno))
 #%% advi
@@ -88,18 +88,6 @@ n_chains = 500
 n_steps = 100
 tune_interval = 25
 n_jobs = 1
-
-with pm.Model() as mixedEffect2:
-    ### hyperpriors
-    # transform need to be None for SMC to work (transformed doesnt have random method)
-    h2     = pm.Uniform('h2', transform=None)
-    sigma2 = pm.HalfCauchy('sigma2', 5, transform=None)
-    #beta_0 = pm.Uniform('beta_0', lower=-1000, upper=1000)   # a replacement for improper prior
-    w = pm.Normal('w', mu = 0, sd = 100, shape=M)
-    z = pm.Normal('z', mu = 0, sd= (h2*sigma2)**0.5 , shape=N)
-    g = T.dot(L,z)
-    y = pm.Normal('y', mu = g + T.dot(X,w), 
-                  sd= ((1-h2)*sigma2)**0.5 , observed=Pheno)
     
 mtrace = smc.sample_smc(
                         n_steps=n_steps,
@@ -109,7 +97,7 @@ mtrace = smc.sample_smc(
                         progressbar=False,
                         stage=0,
                         homepath=test_folder,
-                        model=mixedEffect2)
+                        model=mixedEffect)
 #%%
 pm.traceplot(mtrace, lines={'w':w0, 'z':z0});
 #%% plot advi and NUTS (copy from pymc3 example)
