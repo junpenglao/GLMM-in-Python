@@ -85,12 +85,12 @@ from pymc3.step_methods import smc
 test_folder = mkdtemp(prefix='ATMIP_TEST')
 
 n_chains = 500
-n_steps = 100
+samples = 1000
 tune_interval = 25
 n_jobs = 1
     
 mtrace = smc.sample_smc(
-                        n_steps=n_steps,
+                        samples=samples,
                         n_chains=n_chains,
                         tune_interval=tune_interval,
                         n_jobs=n_jobs,
@@ -134,7 +134,7 @@ wpymc = np.asarray(df_summary1['mean'])
 df_summary2 = pm.summary(trace[burnin:],varnames=['z'])
 zpymc = np.asarray(df_summary2['mean'])
 
-burnin=5000
+burnin=4000
 df_summary1 = pm.summary(tracede[burnin:],varnames=['w'])
 wpymcde = np.asarray(df_summary1['mean'])
 df_summary2 = pm.summary(tracede[burnin:],varnames=['z'])
