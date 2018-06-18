@@ -79,25 +79,14 @@ with mixedEffect:
     tracede = pm.sample(5000, njobs=50, tune=1000, step=pm.DEMetropolis())
 
 pm.traceplot(tracede, lines={'w':w0, 'z':z0});
-#%% atmcmc
-from tempfile import mkdtemp
-from pymc3.step_methods import smc
-test_folder = mkdtemp(prefix='ATMIP_TEST')
-
+#%% SMC
 n_chains = 500
 samples = 1000
 tune_interval = 25
-n_jobs = 1
-    
-mtrace = smc.sample_smc(
-                        samples=samples,
-                        n_chains=n_chains,
-                        tune_interval=tune_interval,
-                        n_jobs=n_jobs,
-                        progressbar=False,
-                        stage=0,
-                        homepath=test_folder,
-                        model=mixedEffect)
+
+with mixedEffect:
+    mtrace = pm.sample(samples, chains=n_chains,
+                       step=pm.SMC(tune_interval=tune_interval))
 #%%
 pm.traceplot(mtrace, lines={'w':w0, 'z':z0});
 #%% plot advi and NUTS (copy from pymc3 example)
